@@ -1,90 +1,68 @@
-from flask import Flask, request
-from flask_restful import Resource, Api, reqparse
-import json
+from flask_restful import Resource, reqparse
 from utils.database_connection import DatabaseConnection
-
-def is_valid_token(token):
-    return token == 'abcd1234'
+from utils.authentication import auth_required
 
 class CategoriesResource(Resource):
     def __init__(self):
-
+        # Inicialización de la conexión a la base de datos y el analizador de argumentos
         self.db = DatabaseConnection('db.json')
         self.db.connect()
-
-        self.categories_data = self.db.get_categories()
         self.parser = reqparse.RequestParser()
+        self.parser.add_argument('name', type=str, required=True, help='Name of the category')
 
+    @auth_required
     def get(self, category_id=None):
-        token = request.headers.get('Authorization')
-        if not token:
-            return { 'message': 'Unauthorized acces token not found'}, 401
-        if not is_valid_token(token):
-           return { 'message': 'Unauthorized invalid token'}, 401
+        """
+        Maneja las solicitudes GET para obtener categorías. Si se proporciona un ID, devuelve
+        una categoría específica; de lo contrario, devuelve todas las categorías.
+        """
+        categories = self.db.get_categories()
 
         if category_id is not None:
-            category = next((p for p in self.categories_data if p['id'] == category_id), None)
-            if category is not None:
-                return category
-            else:
-                return {'message': 'Category not found'}, 404
-         
-        return self.categories_data 
+            category = next((category for category in categories if category['id'] == category_id), None)
+            if category:
+                return category, 200
+            return {'message': 'Category not found'}, 404
 
+        return categories, 200
+
+    @auth_required
     def post(self):
-        token = request.headers.get('Authorization')
-        if not token:
-            return { 'message': 'Unauthorized acces token not found'}, 401
-        if not is_valid_token(token):
-           return { 'message': 'Unauthorized invalid token'}, 401
-
-        self.parser.add_argument('name', type=str, required=True, help='Name of the category')
- 
+        """
+        Maneja las solicitudes POST para agregar una nueva categoría.
+        Requiere el nombre de la categoría en el cuerpo de la solicitud.
+        """
         args = self.parser.parse_args()
-        print("*****",args)
         new_category_name = args['name']
-        if not new_category_name:
-            return {'message': 'Category name is required'}, 400
 
-        categories = self.categories_data
-        if new_category_name in categories:
+        categories = self.db.get_categories()
+
+        # Validación de categoría duplicada
+        if any(category['name'] == new_category_name for category in categories):
             return {'message': 'Category already exists'}, 400
 
-        new_category = {
-                'id': len(self.categories_data) + 1,
-                'name': new_category_name
-        }
-
-        categories.append(new_category)
-        self.categories_data = categories
-        
+        # Crear y guardar nueva categoría
+        new_category = {'id': len(categories) + 1, 'name': new_category_name}
         self.db.add_category(new_category)
 
         return {'message': 'Category added successfully'}, 201
 
+    @auth_required
     def delete(self):
-        token = request.headers.get('Authorization')
-        if not token:
-            return { 'message': 'Unauthorized acces token not found'}, 401
-        if not is_valid_token(token):
-           return { 'message': 'Unauthorized invalid token'}, 401
-
-        args = self.parser.parse_args()
-        self.parser.add_argument('name', type=str, required=True, help='Name of the category')
+        """
+        Maneja las solicitudes DELETE para eliminar una categoría existente.
+        Requiere el nombre de la categoría en el cuerpo de la solicitud.
+        """
         args = self.parser.parse_args()
         category_name = args['name']
- 
-        if not category_name:
-            return {'message': 'Category name is required'}, 400
 
-        category_to_remove = next((cat for cat in self.categories_data if cat["name"] == category_name), None)
+        categories = self.db.get_categories()
+        category_to_remove = next((category for category in categories if category['name'] == category_name), None)
 
-        if category_to_remove is None:
+        if not category_to_remove:
             return {'message': 'Category not found'}, 404
-        else:
-            categories = [cat for cat in self.categories_data if cat["name"] != category_to_remove]
-            self.categories_data = categories
-            self.db.remove_category(category_name)
 
-            return {'message': 'Category removed successfully'}, 200
+        # Eliminar la categoría
+        self.db.remove_category(category_name)
 
+        return {'message': 'Category removed successfully'}, 200
