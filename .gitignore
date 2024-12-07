@@ -1,4 +1,3 @@
 venv/
 *pycache*
-db.json
-favorites.json
+*.json
