@@ -1,79 +1,74 @@
 import json
+import os
 
 class DatabaseConnection:
     def __init__(self, json_file_path):
         self.json_file_path = json_file_path
-        self.data = None
+        self.data = None 
 
     def connect(self):
-        try:
+        """Carga los datos desde el archivo JSON."""
+        if os.path.exists(self.json_file_path):
             with open(self.json_file_path, 'r') as json_file:
                 self.data = json.load(json_file)
-        except FileNotFoundError:
-            self.data = None
-            print("Error: json file not found.")
-
-    def get_products(self):
-        if self.data:
-            return self.data.get('products', [])
         else:
+            print("Warning: JSON file not found, initializing with empty data.")
+            self.data = {"products": [], "categories": [], "favorites": []}
+
+    def _save_data(self):
+        """Guarda los datos actuales en el archivo JSON."""
+        if self.data:
+            with open(self.json_file_path, 'w') as json_file:
+                json.dump(self.data, json_file, indent=4)
+        else:
+            print("Error: No data to save.")
+
+    def _add_item(self, key, new_item, unique_key=None):
+        """Agrega un elemento a la lista correspondiente en los datos."""
+        if not self.data:
+            print("Error: No data loaded. Call connect() first.")
+            return
+        if new_item not in self.data[key]:
+            if unique_key and any(item[unique_key] == new_item[unique_key] for item in self.data[key]):
+                print(f"Error: {unique_key} already exists in {key}.")
+                return
+            self.data[key].append(new_item)
+            self._save_data()
+        else:
+            print(f"Error: Item already exists in {key}.")
+
+    def get_items(self, key):
+        """Obtiene los elementos de una lista específica."""
+        if self.data:
+            return self.data.get(key, [])
+        else:
+            print("Error: No data loaded. Call connect() first.")
             return []
 
     def add_product(self, new_product):
-        if self.data:
-            products = self.data.get('products', [])
-            products.append(new_product)
-            self.data['products'] = products
-            with open(self.json_file_path, 'w') as json_file:
-                json.dump(self.data, json_file, indent=4)
-        else:
-            print("Error: something went wrong adding the product")
-
-    def get_categories(self):
-        if self.data:
-            return self.data.get('categories', [])
-        else:
-            return []
+        self._add_item('products', new_product, unique_key="id")
 
     def add_category(self, new_category):
-        if self.data:
-            categories = self.data.get('categories', [])
-            categories.append(new_category)
-            self.data['categories'] = categories
-            with open(self.json_file_path, 'w') as json_file:
-                json.dump(self.data, json_file, indent=4)
-        else:
-            print("Error: something went wrond adding category")
+        self._add_item('categories', new_category, unique_key="name")
 
     def remove_category(self, category_name):
-        if self.data:
-            categories = self.data.get('categories', [])
-            categories = [cat for cat in categories if cat["name"] != category_name] 
-            self.data['categories'] = categories
-
-            with open(self.json_file_path, 'w') as json_file:
-                json.dump(self.data, json_file, indent=4)
-        else:
-            print("Error: something went wrond removing category")
-
-    def get_favorites(self):
-        if self.data:
-            return self.data.get('favorites', [])
-        else:
-            return []
+        """Elimina una categoría por nombre."""
+        if not self.data:
+            print("Error: No data loaded. Call connect() first.")
+            return
+        self.data['categories'] = [
+            cat for cat in self.data['categories'] if cat["name"] != category_name
+        ]
+        self._save_data()
 
     def add_favorite(self, new_favorite):
-        if self.data:
-            favorites = self.data.get('favorites', [])
-            favorites.append(new_favorite)
-            self.data['favorites'] = favorites
-            with open(self.json_file_path, 'w') as json_file:
-                json.dump(self.data, json_file, indent=4)
-        else:
-            print("Error: something went wrong adding the favorite product")
+        self._add_item('favorites', new_favorite, unique_key="product_id")
 
+    def get_products(self):
+        return self.get_items('products')
 
+    def get_categories(self):
+        return self.get_items('categories')
 
-
-            
-
+    def get_favorites(self):
+        return self.get_items('favorites')
