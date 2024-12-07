@@ -1,25 +1,24 @@
 from flask import Flask
 from flask_restful import Api
-from endpoints.products import ProductsResource
-from endpoints.auth import AuthenticationResource
-from endpoints.categories import CategoriesResource
-from endpoints.favorites import FavoritesResource
+from config import Config
+from routes import register_routes
+from data_loader import load_data
 
-app = Flask(__name__)
-api = Api(app)
-
-import json
-with open('db.json', 'r') as file:
-    products = json.load(file)
-
-api.add_resource( AuthenticationResource,'/auth')
-
-api.add_resource(ProductsResource, '/products', '/products/<int:product_id>') 
-
-api.add_resource(CategoriesResource, '/categories', '/categories/<int:category_id>')
-
-api.add_resource(FavoritesResource, '/favorites')
+def create_app(config_class=Config):
+    app = Flask(__name__)
+    app.config.from_object(config_class)
+    
+    # Configurar la API
+    api = Api(app)
+    register_routes(api)
+    
+    # Cargar datos iniciales
+    app.products = load_data('db.json')
+    
+    return app
 
 if __name__ == '__main__':
-    app.run(debug=True)
-
+    import os
+    config_env = os.getenv('FLASK_ENV', 'development')
+    app = create_app()
+    app.run(debug=config_env == 'development')
